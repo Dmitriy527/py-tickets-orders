@@ -1,5 +1,6 @@
 from django.db.models import Prefetch, Q, Count, F
 from rest_framework import viewsets
+from rest_framework.pagination import PageNumberPagination
 
 from cinema.models import (
     Genre,
@@ -23,7 +24,7 @@ from cinema.serializers import (
     MovieListSerializer,
     OrderListSerializer,
     OrderCreateSerializer,
-    TicketSerializer,
+    TicketSerializer, MovieSessionCorrectSerializer,
 )
 
 
@@ -61,17 +62,25 @@ class MovieViewSet(viewsets.ModelViewSet):
             actors = self._params_to_string(actors)
 
             for full_name in actors:
-                try:
-                    first, last = full_name.split(" ")
-                    filters |= Q(
-                        actors__first_name__iexact=first,
-                        actors__last_name__iexact=last
-                    )
-                except ValueError:
-                    continue
+                if full_name.isalnum():
+                    print(full_name)
+                    if "{" not in full_name and "}" not in full_name:
+                        try:
+                            first, last = full_name.split(" ")
+                            filters |= Q(
+                                actors__first_name__iexact=first,
+                                actors__last_name__iexact=last
+                            )
+                        except ValueError:
+                            continue
+                    else:
+                        return None
+                else:
+                    return None
         if genres:
             genres = self._params_to_string(genres)
             filters |= Q(genres__name__in=genres)
+            filters |= Q(genres__id__in=genres)
         queryset = queryset.filter(filters)
 
         return queryset
@@ -114,9 +123,10 @@ class MovieSessionViewSet(viewsets.ModelViewSet):
             date = self.request.query_params.get("date", None)
             movie = self.request.query_params.get("movie", None)
             filters = Q()
-            if date and movie:
-                filters |= Q(show_time__icontains=date)
-                filters |= Q(id=movie)
+            if date:
+                filters &= Q(show_time__date=date)
+            if movie:
+                filters &= Q(id=movie)
             queryset = queryset.filter(filters)
         if self.action == "retrieve":
             queryset = self.queryset
@@ -133,6 +143,12 @@ class MovieSessionViewSet(viewsets.ModelViewSet):
         return MovieSessionSerializer
 
 
+class OrderPagination(PageNumberPagination):
+    page_size = 1
+    page_size_query_param = 'page_size'
+    max_page_size = 10000
+
+
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.prefetch_related(
         Prefetch(
@@ -144,6 +160,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         ),
     )
     serializer_class = OrderListSerializer
+    pagination_class = OrderPagination
+
 
     def get_queryset(self):
         return self.queryset.filter(user=self.request.user)
