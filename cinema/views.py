@@ -62,21 +62,14 @@ class MovieViewSet(viewsets.ModelViewSet):
             actors = self._params_to_string(actors)
 
             for full_name in actors:
-                if full_name.isalnum():
-                    print(full_name)
-                    if "{" not in full_name and "}" not in full_name:
-                        try:
-                            first, last = full_name.split(" ")
-                            filters |= Q(
-                                actors__first_name__iexact=first,
-                                actors__last_name__iexact=last
-                            )
-                        except ValueError:
-                            continue
-                    else:
-                        return None
-                else:
-                    return None
+                try:
+                    first, last = full_name.split(" ")
+                    filters |= Q(
+                        actors__first_name__iexact=first,
+                        actors__last_name__iexact=last
+                    )
+                except ValueError:
+                    continue
         if genres:
             genres = self._params_to_string(genres)
             filters |= Q(genres__name__in=genres)
